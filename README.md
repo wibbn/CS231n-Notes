@@ -4,4 +4,3 @@
 + [Course home page](http://cs231n.stanford.edu/index.html)
 + [Course notes](http://cs231n.github.io/)
 + [Syllabus](http://cs231n.stanford.edu/syllabus.html)
-
