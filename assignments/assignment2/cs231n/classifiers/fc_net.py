@@ -49,7 +49,10 @@ class TwoLayerNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        self.params['W1'] = weight_scale * np.random.randn(input_dim, hidden_dim)
+        self.params['W2'] = weight_scale * np.random.randn(hidden_dim, num_classes)
+        self.params['b1'] = np.zeros(hidden_dim)
+        self.params['b2'] = np.zeros(num_classes)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -83,7 +86,13 @@ class TwoLayerNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        W1, W2 = self.params['W1'], self.params['W2']
+        b1, b2 = self.params['b1'], self.params['b2']
+
+        y1, cache1 = affine_relu_forward(X, W1, b1)
+        y2, cache2 = affine_relu_forward(y1, W2, b2)
+
+        scores = y2
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -107,7 +116,18 @@ class TwoLayerNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        loss, df = softmax_loss(scores, y)
+        reg = 0.5 * self.reg * (np.sum(W1**2) + np.sum(W2**2))
+        loss += reg
+
+        dx2, dw2, db2 = affine_relu_backward(df, cache2)
+        dx1, dw1, db1 = affine_relu_backward(dx2, cache1)
+
+        dw1 += self.reg * W1
+        dw2 += self.reg * W2
+
+        grads['W2'], grads['W1'] = dw2, dw1
+        grads['b2'], grads['b1'] = db2, db1
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -178,7 +198,18 @@ class FullyConnectedNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        layer_dims = [input_dim] + hidden_dims + [num_classes]
+
+        for layer in range(self.num_layers):
+            in_dim, out_dim = layer_dims[layer], layer_dims[layer+1]
+
+            self.params['W%d' % (layer+1)] = weight_scale * np.random.randn(in_dim, out_dim)
+            self.params['b%d' % (layer+1)] = np.zeros(out_dim)
+
+            if self.normalization and layer != self.num_layers-1:
+                self.params['gamma%d' % (layer+1)] = np.ones(out_dim)
+                self.params['beta%d' % (layer+1)] = np.zeros(out_dim)
+
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -241,7 +272,35 @@ class FullyConnectedNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        xi = X
+
+        fc_cache_list = []
+        relu_cache_list = []
+        bn_cache_list = []
+        dropout_cache_list = []
+
+        for layer in range(self.num_layers):
+            Wi, bi = self.params['W%d' % (layer+1)], self.params['b%d' % (layer+1)]
+            yi, fc_cache = affine_forward(xi, Wi, bi)
+            fc_cache_list.append(fc_cache)
+
+            if self.normalization and layer != self.num_layers-1:
+                gammai = self.params['gamma%d' % (layer + 1)]
+                betai = self.params['beta%d' % (layer + 1)]
+
+                yi, bn_cache = batchnorm_forward(yi, gammai, betai, self.bn_params[layer])
+                bn_cache_list.append(bn_cache)
+
+            yi, relu_cache = relu_forward(yi)
+            relu_cache_list.append(relu_cache)
+
+            if self.use_dropout:
+                yi, dropout_cache = dropout_forward(yi, self.dropout_params[layer])
+                dropout_cache_list.append(dropout_cache)
+
+            xi = yi
+
+        scores = yi
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -259,8 +318,8 @@ class FullyConnectedNet(object):
         # data loss using softmax, and make sure that grads[k] holds the gradients #
         # for self.params[k]. Don't forget to add L2 regularization!               #
         #                                                                          #
-        # When using batch/layer normalization, you don't need to regularize the scale   #
-        # and shift parameters.                                                    #
+        # When using batch/layer normalization, you don't need to regularize the   #
+        # scale and shift parameters.                                              #
         #                                                                          #
         # NOTE: To ensure that your implementation matches ours and you pass the   #
         # automated tests, make sure that your L2 regularization includes a factor #
@@ -268,7 +327,32 @@ class FullyConnectedNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        loss, df = softmax_loss(scores, y)
+        l2sum = 0
+        for layer in range(self.num_layers):
+            Wi = self.params['W%d' % (layer+1)]
+            l2sum += np.sum(Wi**2)
+        reg = 0.5 * self.reg * l2sum
+        loss += reg
+
+        for layer in range(self.num_layers, 0, -1):
+            if self.use_dropout:
+                df = dropout_backward(df, dropout_cache_list[layer-1])
+
+            df = relu_backward(df, relu_cache_list[layer-1])
+
+            if self.normalization and layer != self.num_layers:
+                df, dgamma, dbeta = batchnorm_backward(df, bn_cache_list[layer-1])
+                grads['gamma%d' % (layer)] = dgamma
+                grads['beta%d' % (layer)] = dbeta
+
+            dxi, dWi, dbi = affine_backward(df, fc_cache_list[layer-1])
+            dWi += self.reg*self.params['W%d' % (layer)]
+
+            grads['W%d' % (layer)] = dWi
+            grads['b%d' % (layer)] = dbi
+
+            df = dxi
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
