@@ -302,7 +302,7 @@ class FullyConnectedNet(object):
             relu_cache_list.append(relu_cache)
 
             if self.use_dropout:
-                yi, dropout_cache = dropout_forward(yi, self.dropout_params[layer])
+                yi, dropout_cache = dropout_forward(yi, self.dropout_param)
                 dropout_cache_list.append(dropout_cache)
 
             xi = yi
@@ -350,7 +350,7 @@ class FullyConnectedNet(object):
 
             if self.normalization and layer != self.num_layers:
                 if self.normalization == 'batchnorm':
-                    dout, dgamma, dbeta = batchnorm_backward(dout, n_cache_list[layer-1])
+                    dout, dgamma, dbeta = batchnorm_backward(dout, norm_cache_list[layer-1])
                 if self.normalization == 'layernorm':
                     dout, dgamma, dbeta = layernorm_backward(dout, norm_cache_list[layer-1])
                     
