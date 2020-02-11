@@ -116,11 +116,11 @@ class TwoLayerNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        loss, df = softmax_loss(scores, y)
+        loss, dout = softmax_loss(scores, y)
         reg = 0.5 * self.reg * (np.sum(W1**2) + np.sum(W2**2))
         loss += reg
 
-        dx2, dw2, db2 = affine_relu_backward(df, cache2)
+        dx2, dw2, db2 = affine_relu_backward(dout, cache2)
         dx1, dw1, db1 = affine_relu_backward(dx2, cache1)
 
         dw1 += self.reg * W1
@@ -231,10 +231,13 @@ class FullyConnectedNet(object):
         # of the first batch normalization layer, self.bn_params[1] to the forward
         # pass of the second batch normalization layer, etc.
         self.bn_params = []
+        self.ln_params = []
         if self.normalization=='batchnorm':
             self.bn_params = [{'mode': 'train'} for i in range(self.num_layers - 1)]
         if self.normalization=='layernorm':
-            self.bn_params = [{} for i in range(self.num_layers - 1)]
+            self.ln_params = [{} for i in range(self.num_layers - 1)]
+
+
 
         # Cast all parameters to the correct datatype
         for k, v in self.params.items():
@@ -276,7 +279,7 @@ class FullyConnectedNet(object):
 
         fc_cache_list = []
         relu_cache_list = []
-        bn_cache_list = []
+        norm_cache_list = []
         dropout_cache_list = []
 
         for layer in range(self.num_layers):
@@ -288,8 +291,12 @@ class FullyConnectedNet(object):
                 gammai = self.params['gamma%d' % (layer + 1)]
                 betai = self.params['beta%d' % (layer + 1)]
 
-                yi, bn_cache = batchnorm_forward(yi, gammai, betai, self.bn_params[layer])
-                bn_cache_list.append(bn_cache)
+                if self.normalization == 'batchnorm':
+                    yi, norm_cache = batchnorm_forward(yi, gammai, betai, self.bn_params[layer])
+                if self.normalization == 'layernorm':
+                    yi, norm_cache = layernorm_forward(yi, gammai, betai, self.ln_params[layer])
+
+                norm_cache_list.append(norm_cache)
 
             yi, relu_cache = relu_forward(yi)
             relu_cache_list.append(relu_cache)
@@ -327,7 +334,7 @@ class FullyConnectedNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        loss, df = softmax_loss(scores, y)
+        loss, dout = softmax_loss(scores, y)
         l2sum = 0
         for layer in range(self.num_layers):
             Wi = self.params['W%d' % (layer+1)]
@@ -337,22 +344,26 @@ class FullyConnectedNet(object):
 
         for layer in range(self.num_layers, 0, -1):
             if self.use_dropout:
-                df = dropout_backward(df, dropout_cache_list[layer-1])
+                dout = dropout_backward(dout, dropout_cache_list[layer-1])
 
-            df = relu_backward(df, relu_cache_list[layer-1])
+            dout = relu_backward(dout, relu_cache_list[layer-1])
 
             if self.normalization and layer != self.num_layers:
-                df, dgamma, dbeta = batchnorm_backward(df, bn_cache_list[layer-1])
+                if self.normalization == 'batchnorm':
+                    dout, dgamma, dbeta = batchnorm_backward(dout, n_cache_list[layer-1])
+                if self.normalization == 'layernorm':
+                    dout, dgamma, dbeta = layernorm_backward(dout, norm_cache_list[layer-1])
+                    
                 grads['gamma%d' % (layer)] = dgamma
                 grads['beta%d' % (layer)] = dbeta
 
-            dxi, dWi, dbi = affine_backward(df, fc_cache_list[layer-1])
+            dxi, dWi, dbi = affine_backward(dout, fc_cache_list[layer-1])
             dWi += self.reg*self.params['W%d' % (layer)]
 
             grads['W%d' % (layer)] = dWi
             grads['b%d' % (layer)] = dbi
 
-            df = dxi
+            dout = dxi
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
