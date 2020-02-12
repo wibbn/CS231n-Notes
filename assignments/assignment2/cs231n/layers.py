@@ -710,7 +710,10 @@ def max_pool_backward_naive(dout, cache):
                 for yi in range(W_):
                     pool = x[n, c, xi * stride : xi * stride + HH, yi * stride : yi * stride + WW]
                     id = np.argmax(np.mat(pool))
-                    
+                    id_x = xi * stride + int(id / HH)
+                    id_y = yi * stride + id % WW
+
+                    dx[n, c, id_x, id_y] += dout[n, c, xi, yi]
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
