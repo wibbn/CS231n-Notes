@@ -755,7 +755,12 @@ def spatial_batchnorm_forward(x, gamma, beta, bn_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    N, C, H, W = x.shape
+
+    x_ = x.transpose(0, 2, 3, 1).reshape(-1, C)
+    out, cache = batchnorm_forward(x_, gamma, beta, bn_param)
+
+    out = out.reshape(N, H, W, C).transpose(0, 3, 1, 2)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -789,7 +794,12 @@ def spatial_batchnorm_backward(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    N, C, H, W = dout.shape
+
+    dout_ = dout.transpose(0, 2, 3, 1).reshape(-1, C)
+    dx, dgamma, dbeta = batchnorm_backward(dout_, cache)
+
+    dx = dx.reshape(N, H, W, C).transpose(0, 3, 1, 2)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -819,6 +829,8 @@ def spatial_groupnorm_forward(x, gamma, beta, G, gn_param):
     - cache: Values needed for the backward pass
     """
     out, cache = None, None
+    gamma = gamma[0, :, 0, 0]
+    beta = beta[0, :, 0, 0]
     eps = gn_param.get('eps',1e-5)
     ###########################################################################
     # TODO: Implement the forward pass for spatial group normalization.       #
@@ -829,7 +841,23 @@ def spatial_groupnorm_forward(x, gamma, beta, G, gn_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    N, C, H, W = x.shape
+    out = np.zeros(x.shape)
+    g_cache = [0] * G
+    g_size = C // G
+
+    for g in range(G):
+        gs = range(g * g_size, (g+1) * g_size)
+
+        x_ = x[:, gs, :, :].reshape(N, -1)
+        gamma_ = np.repeat(gamma[gs], H*W)
+        beta_ = np.repeat(beta[gs], H*W)
+
+        out_, g_cache[g] = layernorm_forward(x_, gamma_, beta_, gn_param)
+        
+        out[:, gs, :, :] = out_.reshape(N, g_size, H, W) 
+    
+    cache = (g_cache, G)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -859,13 +887,30 @@ def spatial_groupnorm_backward(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    N, C, H, W = dout.shape
+    g_cache, G = cache
+    g_size = C // G
+
+    dx = np.zeros(dout.shape)
+    dgamma = np.zeros(C)
+    dbeta = np.zeros(C)
+
+    for g in range(G):
+        gs = range(g * g_size, (g+1) * g_size)
+
+        dout_ = dout[:, gs, :, :].reshape(N, -1)
+        # print(g_cache[g])
+        dx_, dgamma_, dbeta_ = layernorm_backward(dout_, g_cache[g])
+
+        dx[:, gs, :, :] = dx_.reshape(N, g_size, H, W)
+        dgamma[gs] = dgamma_.reshape(g_size, -1).sum(axis=1)
+        dbeta[gs] = dbeta_.reshape(g_size, -1).sum(axis=1)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
-    return dx, dgamma, dbeta
+    return dx, dgamma[np.newaxis, :, np.newaxis, np.newaxis], dbeta[np.newaxis, :, np.newaxis, np.newaxis]
 
 
 def svm_loss(x, y):
